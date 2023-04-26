@@ -2,32 +2,54 @@ import { Injectable } from '@nestjs/common';
 import { BucketItemFromList, Client } from 'minio';
 import { MinioService } from 'nestjs-minio-client';
 import { config } from 'src/config';
+import { CreateBucketV1Request } from '../requests/v1/minio/create-bucket-v1.request';
 
 @Injectable()
 export class MinioClientService {
   constructor(private readonly minioService: MinioService) { }
 
-  async test(): Promise<String> {
-    const minioClient = new Client({
-      endPoint: config.storage.minio.endPoint,
-      port: config.storage.minio.port,
-      useSSL: config.storage.minio.isUseSSL,
-      accessKey: config.storage.minio.accessKey,
-      secretKey: config.storage.minio.secretKey,
+  async makeBucket(data: CreateBucketV1Request): Promise<Object> {
+    return new Promise((resolve, reject) => {
+      this.minioService.client.makeBucket(
+        data.bucketName,
+        data.region,
+        function (err) {
+          if (err) reject(err)
+          resolve({
+            bucketName: data.bucketName,
+            region: data.region,
+          });
+        });
     });
+  }
 
+  async isBucketExists(bucketName: string): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      this.minioService.client.bucketExists(bucketName, function (err, exists) {
+        if (err) reject(err);
+        resolve(exists);
+      });
+    })
+  }
+
+  async listAllBuckets(): Promise<BucketItemFromList[]> {
+    return this.minioService.client.listBuckets();
+  }
+
+  async upload(file: Express.Multer.File): Promise<String> {
     const metaData = {
       'Content-Type': 'application/octet-stream',
     };
 
-    const fileDestPath = 'world.jpg';
-    const fileOriginalRelativePath = config.storage.path + '/' + fileDestPath;
+    const fileName = file.originalname;
+    const destinationPath = config.storage.path.replace("./", "") + '/' + fileName;
+    const filePath = '/' + fileName;
 
     // Using fPutObject API upload your file to the bucket europetrip.
-    minioClient.fPutObject(
+    this.minioService.client.fPutObject(
       config.storage.minio.bucketName,
-      fileDestPath,
-      fileOriginalRelativePath,
+      destinationPath,
+      filePath,
       metaData,
       function (err, etag) {
         if (err) return console.log(err);
@@ -40,35 +62,8 @@ export class MinioClientService {
       '/' +
       config.storage.minio.bucketName +
       '/' +
-      fileDestPath;
+      filePath;
 
     return publicLink;
   }
-
-  async listAllBuckets(): Promise<BucketItemFromList[]> {
-    return this.minioService.client.listBuckets();
-  }
-
-  // async upload(): Promise<void> {
-  //   // File that needs to be uploaded.
-  //   var file = '/tmp/photos-europe.tar'
-
-  //   // Make a bucket called europetrip.
-  //   this.minioClient.makeBucket('europetrip', 'us-east-1', function (err) {
-  //     if (err) return console.log(err)
-
-  //     console.log('Bucket created successfully in "us-east-1".')
-
-  //     var metaData = {
-  //       'Content-Type': 'application/octet-stream',
-  //       'X-Amz-Meta-Testing': 1234,
-  //       'example': 5678
-  //     }
-  //     // Using fPutObject API upload your file to the bucket europetrip.
-  //     this.minioClient.fPutObject('europetrip', 'photos-europe.tar', file, metaData, function (err, etag) {
-  //       if (err) return console.log(err)
-  //       console.log('File uploaded successfully.')
-  //     });
-  //   });
-  // }
 }
